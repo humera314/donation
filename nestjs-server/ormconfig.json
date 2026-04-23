@@ -1,10 +1,10 @@
 {
   "type": "postgres",
-  "host": "lallah.db.elephantsql.com",
+  "host": "db.ijsyuwikxiwhwfmjiksa.supabase.co",
   "port": 5432,
-  "username": "lzgcawga",
-  "password": "TW28mSFWneuoyqkgBsGrlnjjdbI0bVlt",
-  "database": "lzgcawga",
+  "username": "postgres",
+  "password": "VUA@y3zJUsKk4*q",
+  "database": "postgres",
   "migrationsTableName": "migration",
   "entities": [
     "dist/**/*.js"

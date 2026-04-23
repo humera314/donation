@@ -1,4 +1,4 @@
-import React, { Component, useState } from "react";
+import React, { Component } from "react";
 import { Button, Modal } from 'react-bootstrap';
 export class ModalWithButton extends Component<IProps, IState> {
 
@@ -26,8 +26,8 @@ export class ModalWithButton extends Component<IProps, IState> {
     }
 
     openModal = () => {
-        if (this.props.breforeOpenModal) {
-            this.props.breforeOpenModal();
+        if (this.props.beforeOpenModal) {
+            this.props.beforeOpenModal();
         }
         this.toggleModal(true);
     }
@@ -57,7 +57,7 @@ export class ModalWithButton extends Component<IProps, IState> {
 interface IProps {
     buttonText: string;
     buttonClassName?: string;
-    breforeOpenModal?: () => void;
+    beforeOpenModal?: () => void;
     onSaveClick(): void;
     onCancelClick?: () => void;
     modalTitle: string;

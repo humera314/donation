@@ -12,7 +12,7 @@ class ConfigService {
             throw new Error(`config error - missing env.${key}`);
         }
 
-        return value;
+        return value!;
     }
 
     public ensureValues(keys: string[]) {
@@ -33,11 +33,14 @@ class ConfigService {
             username: this.getValue('POSTGRES_USER'),
             password: this.getValue('POSTGRES_PASSWORD'),
             database: this.getValue('POSTGRES_DATABASE'),
+            ssl: { rejectUnauthorized: false },
 
             migrationsTableName: 'migration',
+            autoLoadEntities: true,
+            synchronize: true,
 
             entities: [
-                "dist/**/*.js"
+                __dirname + '/../**/*.entity.{js,ts}'
             ],
             migrations: [
                 "dist/migration/**/*.js"

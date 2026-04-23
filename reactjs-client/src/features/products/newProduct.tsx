@@ -32,7 +32,7 @@ export class NewProduct extends Component<IProps, IProductCreate> {
 
     render() {
         return (
-            <ModalWithButton modalTitle="New Product" buttonText="Add New Product" buttonClassName="float-right" onSaveClick={this.onSave} breforeOpenModal={this.beforeOpenModal}>
+            <ModalWithButton modalTitle="New Product" buttonText="Add New Product" buttonClassName="float-right" onSaveClick={this.onSave} beforeOpenModal={this.beforeOpenModal}>
                 <Row>
                     <Col>
                         <Form.Group controlId="fromProductName">

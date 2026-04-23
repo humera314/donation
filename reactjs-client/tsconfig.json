@@ -21,5 +21,5 @@
   },
   "include": [
     "src"
-  ]
+, "../nestjs-server/src/users"  ]
 }
