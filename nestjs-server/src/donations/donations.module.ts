@@ -10,6 +10,7 @@ import { GatewaysModule } from '../gateways/gateways.module';
   imports: [TypeOrmModule.forFeature([Donation, Campaign]), AuthModule, GatewaysModule,],
   controllers: [DonationsController],
   providers: [DonationsService],
+  exports: [DonationsService], 
   
 })
 export class DonationsModule {}

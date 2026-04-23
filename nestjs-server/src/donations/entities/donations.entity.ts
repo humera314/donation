@@ -23,6 +23,12 @@ export class Donation {
   @Column('text', { nullable: true })
   message!: string | null;
 
+  @Column({ nullable: true })
+  paymentIntentId!: string | null;
+
+  @Column({ default: 'completed' })
+  paymentStatus!: string;
+
   @CreateDateColumn()
   createdAt!: Date;
 }

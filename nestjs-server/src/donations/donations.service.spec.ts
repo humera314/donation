@@ -26,6 +26,8 @@ const mockDonation: Donation = {
   donorEmail: 'sara@example.com',
   isAnonymous: false,
   message: 'Keep up the great work!',
+  paymentIntentId: 'pi_test_123',
+  paymentStatus: 'completed',
   createdAt: new Date('2024-01-01'),
 };
 
@@ -78,7 +80,7 @@ describe('DonationsService', () => {
   });
 
   describe('create', () => {
-    const dto = {
+    const baseDto = {
       amount: 100.50,
       campaignId: 1,
       donorName: 'Sara',
@@ -87,67 +89,114 @@ describe('DonationsService', () => {
       message: 'Keep up the great work!',
     };
 
-    it('should save the donation and update campaign currentAmount', async () => {
-      const campaign = { ...mockCampaign, currentAmount: 0 };
-      mockDonationsRepository.create.mockReturnValue(mockDonation);
-      mockDonationsRepository.save.mockResolvedValue(mockDonation);
-      mockCampaignsRepository.findOne.mockResolvedValue(campaign);
-      mockCampaignsRepository.save.mockResolvedValue({ ...campaign, currentAmount: 100.50 });
+    describe('Stripe-paid donations', () => {
+      const stripeDto = { ...baseDto, paymentIntentId: 'pi_test_123' };
 
-      const result = await service.create(dto);
+      it('should save donation with paymentIntentId from confirmed Stripe payment', async () => {
+        const campaign = { ...mockCampaign };
+        mockDonationsRepository.create.mockReturnValue(mockDonation);
+        mockDonationsRepository.save.mockResolvedValue(mockDonation);
+        mockCampaignsRepository.findOne.mockResolvedValue(campaign);
+        mockCampaignsRepository.save.mockResolvedValue(campaign);
 
-      expect(mockDonationsRepository.save).toHaveBeenCalled();
-      expect(mockCampaignsRepository.findOne).toHaveBeenCalledWith(1);
-      expect(campaign.currentAmount).toBe(100.5);
-      expect(result).toEqual(mockDonation);
+        const result = await service.create(stripeDto);
+
+        expect(mockDonationsRepository.create).toHaveBeenCalledWith(stripeDto);
+        expect(result.paymentIntentId).toBe('pi_test_123');
+        expect(result.paymentStatus).toBe('completed');
+      });
+
+      it('should update campaign currentAmount after Stripe payment', async () => {
+        const campaign = { ...mockCampaign, currentAmount: 0 };
+        mockDonationsRepository.create.mockReturnValue(mockDonation);
+        mockDonationsRepository.save.mockResolvedValue(mockDonation);
+        mockCampaignsRepository.findOne.mockResolvedValue(campaign);
+        mockCampaignsRepository.save.mockResolvedValue(campaign);
+
+        await service.create(stripeDto);
+
+        expect(campaign.currentAmount).toBe(100.5);
+        expect(mockCampaignsRepository.save).toHaveBeenCalled();
+      });
+
+      it('should broadcast donation and progress after Stripe payment', async () => {
+        const campaign = { ...mockCampaign };
+        mockDonationsRepository.create.mockReturnValue(mockDonation);
+        mockDonationsRepository.save.mockResolvedValue(mockDonation);
+        mockCampaignsRepository.findOne.mockResolvedValue(campaign);
+        mockCampaignsRepository.save.mockResolvedValue(campaign);
+
+        await service.create(stripeDto);
+
+        expect(mockCampaignsGateway.broadcastNewDonation).toHaveBeenCalledWith('1', mockDonation);
+        expect(mockCampaignsGateway.broadcastProgressUpdate).toHaveBeenCalled();
+      });
     });
 
-    it('should broadcast new donation and progress update via gateway', async () => {
-      const campaign = { ...mockCampaign, currentAmount: 0 };
-      mockDonationsRepository.create.mockReturnValue(mockDonation);
-      mockDonationsRepository.save.mockResolvedValue(mockDonation);
-      mockCampaignsRepository.findOne.mockResolvedValue(campaign);
-      mockCampaignsRepository.save.mockResolvedValue(campaign);
+    describe('direct donations (no Stripe)', () => {
+      it('should save donation without paymentIntentId', async () => {
+        const directDonation = { ...mockDonation, paymentIntentId: null };
+        const campaign = { ...mockCampaign };
+        mockDonationsRepository.create.mockReturnValue(directDonation);
+        mockDonationsRepository.save.mockResolvedValue(directDonation);
+        mockCampaignsRepository.findOne.mockResolvedValue(campaign);
+        mockCampaignsRepository.save.mockResolvedValue(campaign);
 
-      await service.create(dto);
+        const result = await service.create(baseDto);
 
-      expect(mockCampaignsGateway.broadcastNewDonation).toHaveBeenCalledWith('1', mockDonation);
-      expect(mockCampaignsGateway.broadcastProgressUpdate).toHaveBeenCalled();
+        expect(mockDonationsRepository.create).toHaveBeenCalledWith(baseDto);
+        expect(result.paymentIntentId).toBeNull();
+      });
     });
 
-    it('should set campaign status to completed when goal is reached', async () => {
-      const campaign = { ...mockCampaign, currentAmount: 49900, goalAmount: 50000 };
-      mockDonationsRepository.create.mockReturnValue({ ...mockDonation, amount: 100 });
-      mockDonationsRepository.save.mockResolvedValue({ ...mockDonation, amount: 100 });
-      mockCampaignsRepository.findOne.mockResolvedValue(campaign);
-      mockCampaignsRepository.save.mockResolvedValue(campaign);
+    describe('campaign goal tracking', () => {
+      it('should set campaign status to completed when goal is reached', async () => {
+        const campaign = { ...mockCampaign, currentAmount: 49900, goalAmount: 50000 };
+        mockDonationsRepository.create.mockReturnValue({ ...mockDonation, amount: 100 });
+        mockDonationsRepository.save.mockResolvedValue({ ...mockDonation, amount: 100 });
+        mockCampaignsRepository.findOne.mockResolvedValue(campaign);
+        mockCampaignsRepository.save.mockResolvedValue(campaign);
 
-      await service.create({ ...dto, amount: 100 });
+        await service.create({ ...baseDto, amount: 100 });
 
-      expect(campaign.status).toBe('completed');
-      expect(mockCampaignsRepository.save).toHaveBeenCalledWith(
-        expect.objectContaining({ status: 'completed' }),
-      );
+        expect(campaign.status).toBe('completed');
+        expect(mockCampaignsRepository.save).toHaveBeenCalledWith(
+          expect.objectContaining({ status: 'completed' }),
+        );
+      });
+
+      it('should keep campaign active when goal is not yet reached', async () => {
+        const campaign = { ...mockCampaign, currentAmount: 0, goalAmount: 50000 };
+        mockDonationsRepository.create.mockReturnValue(mockDonation);
+        mockDonationsRepository.save.mockResolvedValue(mockDonation);
+        mockCampaignsRepository.findOne.mockResolvedValue(campaign);
+        mockCampaignsRepository.save.mockResolvedValue(campaign);
+
+        await service.create(baseDto);
+
+        expect(campaign.status).toBe('active');
+      });
     });
 
-    it('should keep campaign active when goal is not reached', async () => {
-      const campaign = { ...mockCampaign, currentAmount: 0, goalAmount: 50000 };
-      mockDonationsRepository.create.mockReturnValue(mockDonation);
-      mockDonationsRepository.save.mockResolvedValue(mockDonation);
-      mockCampaignsRepository.findOne.mockResolvedValue(campaign);
-      mockCampaignsRepository.save.mockResolvedValue(campaign);
+    describe('error handling', () => {
+      it('should throw NotFoundException when campaign does not exist', async () => {
+        mockDonationsRepository.create.mockReturnValue(mockDonation);
+        mockDonationsRepository.save.mockResolvedValue(mockDonation);
+        mockCampaignsRepository.findOne.mockResolvedValue(undefined);
 
-      await service.create(dto);
+        await expect(service.create(baseDto)).rejects.toThrow(NotFoundException);
+      });
 
-      expect(campaign.status).toBe('active');
-    });
+      it('should not create donation when campaign is not found', async () => {
+        mockDonationsRepository.create.mockReturnValue(mockDonation);
+        mockDonationsRepository.save.mockResolvedValue(mockDonation);
+        mockCampaignsRepository.findOne.mockResolvedValue(undefined);
 
-    it('should throw NotFoundException when campaign does not exist', async () => {
-      mockDonationsRepository.create.mockReturnValue(mockDonation);
-      mockDonationsRepository.save.mockResolvedValue(mockDonation);
-      mockCampaignsRepository.findOne.mockResolvedValue(undefined);
+        await expect(service.create(baseDto)).rejects.toThrow();
 
-      await expect(service.create(dto)).rejects.toThrow(NotFoundException);
+        expect(mockCampaignsGateway.broadcastNewDonation).not.toHaveBeenCalled();
+        expect(mockCampaignsGateway.broadcastProgressUpdate).not.toHaveBeenCalled();
+      });
     });
   });
 });

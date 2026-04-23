@@ -5,4 +5,5 @@ export class CreateDonationDto {
   donorEmail!: string;
   isAnonymous!: boolean;
   message?: string;
+  paymentIntentId?: string
 }
